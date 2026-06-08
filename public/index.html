@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🏭 FactoryTrack</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════ LOGIN ══ -->
+<div id="tela-login">
+  <div class="login-box">
+    <div class="login-logo">
+      <span class="em">🏭</span>
+      <h1>FactoryTrack</h1>
+      <p>MetalTech Indústria · Faça login para continuar</p>
+    </div>
+    <div class="login-erro" id="login-erro"></div>
+    <div class="fg">
+      <label>E-mail</label>
+      <input id="l-email" type="email" placeholder="admin@metaltech.com"
+        onkeydown="if(event.key==='Enter') fazerLogin()">
+    </div>
+    <div class="fg">
+      <label>Senha</label>
+      <input id="l-senha" type="password" placeholder="••••••"
+        onkeydown="if(event.key==='Enter') fazerLogin()">
+    </div>
+    <button class="btn btn-blue" id="btn-login"
+      style="width:100%;padding:10px;margin-top:4px"
+      onclick="fazerLogin()">
+      Entrar
+    </button>
+    <p style="text-align:center;font-size:.69rem;color:var(--muted);margin-top:14px">
+      Rode <strong style="color:var(--text)">node seed.js</strong> para criar os usuários iniciais
+    </p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ APP ═══ -->
+<div id="app">
+  <aside id="sidebar">
+    <div class="sb-logo">
+      <h1>🏭 FactoryTrack</h1>
+      <div class="sb-user">
+        <span class="tag" id="sb-perfil">—</span>
+        <span id="sb-nome">—</span>
+      </div>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-group">Geral</div>
+      <button class="nav-btn ativo" onclick="ir('dashboard',this)">
+        <span class="ic">📊</span><span>Dashboard</span>
+      </button>
+      <button class="nav-btn" onclick="ir('ordens',this)">
+        <span class="ic">📋</span><span>Ordens</span>
+      </button>
+      <div class="sb-group">Cadastros</div>
+      <button class="nav-btn" onclick="ir('produtos',this)">
+        <span class="ic">🔩</span><span id="nav-produtos-label">Produtos</span>
+      </button>
+      <button class="nav-btn" onclick="ir('clientes',this)">
+        <span class="ic">🏢</span><span>Clientes</span>
+      </button>
+      <div class="sb-group" id="menu-usuarios" style="display:none">Sistema</div>
+      <button class="nav-btn" id="btn-usuarios" onclick="ir('usuarios',this)"
+        style="display:none">
+        <span class="ic">🔐</span><span>Usuários</span>
+      </button>
+      <div class="sb-group" id="sb-group-lider" style="display:none">Produção</div>
+      <button class="nav-btn" id="btn-nav-producao" onclick="ir('producao',this)"
+        style="display:none">
+        <span class="ic">⚙️</span><span>Minhas Ordens</span>
+      </button>
+    </nav>
+    <div class="sb-footer">
+      <span>v1.0</span>
+      <button class="btn-logout" onclick="sair()">Sair</button>
+    </div>
+  </aside>
+
+  <div id="conteudo">
+
+    <!-- ══════════════════════════════════ DASHBOARD ══════ -->
+    <section id="pg-dashboard" class="secao ativa">
+      <div class="pg-header">
+        <div>
+          <h2>Dashboard</h2>
+          <p id="dash-sub">Resumo da produção</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="carregarDashboard()">↻ Atualizar</button>
+      </div>
+      <div class="pg-body">
+        <div class="stats-grid">
+          <div class="stat cr">
+            <span class="ico">📋</span>
+            <div class="lbl">Ordens</div>
+            <div class="val" id="s-ord">—</div>
+            <div class="sub" id="s-ord-sub">carregando</div>
+          </div>
+          <div class="stat co" id="stat-fat">
+            <span class="ico">💰</span>
+            <div class="lbl">Faturamento</div>
+            <div class="val" id="s-fat">—</div>
+            <div class="sub">total geral</div>
+          </div>
+          <div class="stat cg" id="stat-cli">
+            <span class="ico">🏢</span>
+            <div class="lbl">Clientes</div>
+            <div class="val" id="s-cli">—</div>
+            <div class="sub">cadastrados</div>
+          </div>
+          <div class="stat cb">
+            <span class="ico">🔩</span>
+            <div class="lbl">Produtos</div>
+            <div class="val" id="s-pro">—</div>
+            <div class="sub">no catálogo</div>
+          </div>
+          <div class="stat cp">
+            <span class="ico">⚙️</span>
+            <div class="lbl">Em Produção</div>
+            <div class="val" id="s-prod">—</div>
+            <div class="sub">em andamento</div>
+          </div>
+        </div>
+        <div class="dash-grid">
+          <div class="card">
+            <div class="card-head">
+              <h3>Ordens Recentes</h3>
+              <button class="btn btn-blue btn-sm"
+                onclick="ir('ordens', document.querySelector('[onclick*=ordens]'))">
+                + Nova
+              </button>
+            </div>
+            <div class="card-body" id="dash-ordens">
+              <div class="spin-wrap"><div class="spin"></div> Carregando...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Catálogo Ativo</h3></div>
+            <div class="card-body" id="dash-catalogo">
+              <div class="spin-wrap"><div class="spin"></div> Carregando...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════ ORDENS ══════ -->
+    <section id="pg-ordens" class="secao">
+      <div class="pg-header">
+        <div><h2>Ordens de Produção</h2><p>Acompanhe e gerencie as ordens</p></div>
+        <button class="btn btn-blue" onclick="abrirOrdem()">+ Nova Ordem</button>
+      </div>
+      <div class="pg-body">
+        <!-- Filtro por status -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+          <button class="btn btn-ghost btn-sm filtro-status ativo" onclick="filtrarStatus('', this)">Todas</button>
+          <button class="btn btn-ghost btn-sm filtro-status" onclick="filtrarStatus('aguardando_producao', this)">⏳ Aguardando</button>
+          <button class="btn btn-ghost btn-sm filtro-status" onclick="filtrarStatus('em_producao', this)">⚙️ Em Produção</button>
+          <button class="btn btn-ghost btn-sm filtro-status" onclick="filtrarStatus('finalizado', this)">✅ Finalizados</button>
+          <button class="btn btn-ghost btn-sm filtro-status" onclick="filtrarStatus('cancelado', this)">❌ Cancelados</button>
+        </div>
+        <div class="card">
+          <div class="card-body tbl-wrap" id="tbl-ordens">
+            <div class="spin-wrap"><div class="spin"></div> Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════ PRODUTOS ════ -->
+    <section id="pg-produtos" class="secao">
+      <div class="pg-header">
+        <div>
+          <h2 id="pg-produtos-titulo">Produtos</h2>
+          <p id="pg-produtos-sub">Gerencie o catálogo de peças</p>
+        </div>
+        <button class="btn btn-blue" id="btn-novo-produto" onclick="abrirProduto()">+ Novo Produto</button>
+      </div>
+      <div class="pg-body">
+        <div class="card">
+          <div class="card-body tbl-wrap" id="tbl-produtos">
+            <div class="spin-wrap"><div class="spin"></div> Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════ CLIENTES ════ -->
+    <section id="pg-clientes" class="secao">
+      <div class="pg-header">
+        <div><h2>Clientes</h2><p>Cadastre e busque clientes</p></div>
+        <button class="btn btn-blue" onclick="abrirCliente()">+ Novo Cliente</button>
+      </div>
+      <div class="pg-body">
+        <div style="margin-bottom:12px">
+          <input id="busca-cli" placeholder="🔍  Buscar por nome..."
+            style="max-width:270px" oninput="buscarCli(this.value)">
+        </div>
+        <div class="card">
+          <div class="card-body tbl-wrap" id="tbl-clientes">
+            <div class="spin-wrap"><div class="spin"></div> Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════ USUÁRIOS ════ -->
+    <section id="pg-usuarios" class="secao">
+      <div class="pg-header">
+        <div><h2>Usuários</h2><p>Operadores, líderes e administradores</p></div>
+        <button class="btn btn-ghost" onclick="abrirUsuario()">+ Novo Usuário</button>
+      </div>
+      <div class="pg-body">
+        <div class="card">
+          <div class="card-body tbl-wrap" id="tbl-usuarios">
+            <div class="spin-wrap"><div class="spin"></div> Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════ PRODUÇÃO ═════ -->
+    <section id="pg-producao" class="secao">
+      <div class="pg-header">
+        <div>
+          <h2>Minhas Ordens</h2>
+          <p id="producao-sub">Ordens sob sua responsabilidade</p>
+        </div>
+        <button class="btn btn-blue" onclick="abrirOrdemLider()">+ Nova Ordem</button>
+      </div>
+      <div class="pg-body">
+        <div class="stats-grid" style="margin-bottom:18px">
+          <div class="stat cr">
+            <span class="ico">📋</span>
+            <div class="lbl">Minhas Ordens</div>
+            <div class="val" id="l-ord">—</div>
+            <div class="sub" id="l-ord-sub">total</div>
+          </div>
+          <div class="stat co">
+            <span class="ico">⏳</span>
+            <div class="lbl">Aguardando</div>
+            <div class="val" id="l-aguard">—</div>
+            <div class="sub">na fila</div>
+          </div>
+          <div class="stat cb">
+            <span class="ico">⚙️</span>
+            <div class="lbl">Em Produção</div>
+            <div class="val" id="l-prod">—</div>
+            <div class="sub">em andamento</div>
+          </div>
+          <div class="stat cg">
+            <span class="ico">✅</span>
+            <div class="lbl">Finalizadas</div>
+            <div class="val" id="l-fin">—</div>
+            <div class="sub">concluídas</div>
+          </div>
+        </div>
+        <div id="grid-producao" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">
+          <div class="spin-wrap"><div class="spin"></div> Carregando...</div>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /conteudo -->
+</div><!-- /app -->
+
+<!-- ══════════════════════════════════ MODAL PRODUTO ══════ -->
+<div id="m-produto" class="modal-bg">
+  <div class="modal">
+    <h3 id="m-produto-t">Novo Produto</h3>
+    <input type="hidden" id="pr-id">
+    <div class="fr2">
+      <div class="fg"><label>Nome *</label><input id="pr-nome" placeholder="Ex: Eixo de Transmissão"></div>
+      <div class="fg"><label>Categoria</label>
+        <select id="pr-cat">
+          <option value="usinagem">Usinagem</option>
+          <option value="solda">Solda</option>
+          <option value="corte">Corte</option>
+          <option value="fundição">Fundição</option>
+          <option value="montagem">Montagem</option>
+          <option value="tratamento">Tratamento Térmico</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label>Especificações Técnicas *</label>
+      <input id="pr-espec" placeholder="Material, dimensões, tolerâncias...">
+    </div>
+    <div class="fg"><label>Descrição</label>
+      <input id="pr-desc" placeholder="Breve descrição da peça...">
+    </div>
+    <div class="fg"><label>Preço Unitário (R$)</label>
+      <input id="pr-preco" type="number" step="0.01" min="0" placeholder="0,00">
+    </div>
+    <div class="fg"><label>Disponível para Produção</label>
+      <select id="pr-disp">
+        <option value="true">✅ Sim</option>
+        <option value="false">❌ Não</option>
+      </select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="fechar('m-produto')">Cancelar</button>
+      <button class="btn btn-blue"  onclick="salvarProduto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ MODAL CLIENTE ══════ -->
+<div id="m-cliente" class="modal-bg">
+  <div class="modal">
+    <h3 id="m-cli-t">Novo Cliente</h3>
+    <input type="hidden" id="c-id">
+    <div class="fr2">
+      <div class="fg"><label>Empresa *</label><input id="c-nome" placeholder="AutoPeças Brasil Ltda"></div>
+      <div class="fg"><label>Telefone *</label><input id="c-tel" placeholder="(11) 99999-9999"></div>
+    </div>
+    <div class="fr2">
+      <div class="fg"><label>Rua</label><input id="c-rua" placeholder="Av. Industrial"></div>
+      <div class="fg"><label>Número</label><input id="c-num" placeholder="1200"></div>
+    </div>
+    <div class="fr3">
+      <div class="fg"><label>Bairro</label><input id="c-bairro" placeholder="Dist. Industrial"></div>
+      <div class="fg"><label>Cidade</label><input id="c-cidade" placeholder="São Paulo"></div>
+      <div class="fg"><label>CEP</label><input id="c-cep" placeholder="00000-000"></div>
+    </div>
+    <div class="fg"><label>Complemento</label><input id="c-comp" placeholder="Bloco B, Galpão 3"></div>
+    <div class="fg"><label>Observações</label><input id="c-obs" placeholder="Pedidos urgentes, prazo especial..."></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="fechar('m-cliente')">Cancelar</button>
+      <button class="btn btn-blue"  onclick="salvarCliente()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ MODAL ORDEM ════════ -->
+<div id="m-ordem" class="modal-bg">
+  <div class="modal lg">
+    <h3>Nova Ordem de Produção</h3>
+    <div class="fr2">
+      <div class="fg"><label>Cliente *</label><select id="ord-cli"></select></div>
+      <div class="fg"><label>Prazo de Entrega</label><input id="ord-prazo" type="date"></div>
+    </div>
+    <div class="div"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+      <label style="margin-bottom:0;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.3px">Itens da Ordem</label>
+      <button class="btn btn-ghost btn-sm" onclick="addItemOrdem()">+ Produto</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 70px 68px 30px;gap:6px;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;padding:0 1px">
+      <span>Produto</span><span>Qtd</span><span>Subtotal</span><span></span>
+    </div>
+    <div id="itens-ordem-lista"></div>
+    <div class="total-box">
+      <div class="row tot"><span>TOTAL DA ORDEM</span><span id="ord-tot">R$ 0,00</span></div>
+    </div>
+    <div class="fr2">
+      <div class="fg"><label>Forma de Pagamento</label>
+        <select id="ord-pag">
+          <option value="a_prazo">A Prazo</option>
+          <option value="boleto">Boleto</option>
+          <option value="pix">PIX</option>
+          <option value="transferencia">Transferência</option>
+          <option value="dinheiro">Dinheiro</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label>Observações</label>
+      <textarea id="ord-obs" rows="2" placeholder="Requisitos especiais, acabamento, embalagem..."></textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="fechar('m-ordem')">Cancelar</button>
+      <button class="btn btn-blue"  onclick="salvarOrdem()">Registrar Ordem</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ MODAL ORDEM LÍDER ════ -->
+<div id="m-ordem-lider" class="modal-bg">
+  <div class="modal lg">
+    <h3>Nova Ordem — Líder de Produção</h3>
+    <div class="fr2">
+      <div class="fg"><label>Cliente (opcional)</label><select id="ol-cli"><option value="">— Sem cliente —</option></select></div>
+      <div class="fg"><label>Prazo de Entrega</label><input id="ol-prazo" type="date"></div>
+    </div>
+    <div class="div"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+      <label style="margin-bottom:0;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.3px">Itens da Ordem</label>
+      <button class="btn btn-ghost btn-sm" onclick="addItemOrdemLider()">+ Produto</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 70px 68px 30px;gap:6px;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;padding:0 1px">
+      <span>Produto</span><span>Qtd</span><span>Subtotal</span><span></span>
+    </div>
+    <div id="itens-ordem-lider-lista"></div>
+    <div class="total-box">
+      <div class="row tot"><span>TOTAL</span><span id="ol-tot">R$ 0,00</span></div>
+    </div>
+    <div class="fg"><label>Observações</label>
+      <textarea id="ol-obs" rows="2" placeholder="Requisitos do chão de fábrica..."></textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="fechar('m-ordem-lider')">Cancelar</button>
+      <button class="btn btn-blue"  onclick="salvarOrdemLider()">Registrar Ordem</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ MODAL STATUS ═════════ -->
+<div id="m-status" class="modal-bg">
+  <div class="modal" style="max-width:330px">
+    <h3>Atualizar Status da Ordem</h3>
+    <input type="hidden" id="st-id">
+    <div class="fg"><label>Novo Status</label>
+      <select id="st-val">
+        <option value="aguardando_producao">⏳ Aguardando Produção</option>
+        <option value="em_producao">⚙️ Em Produção</option>
+        <option value="finalizado">✅ Finalizado</option>
+        <option value="cancelado">❌ Cancelado</option>
+      </select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="fechar('m-status')">Cancelar</button>
+      <button class="btn btn-blue"  onclick="salvarStatus()">Atualizar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ MODAL USUÁRIO ════════ -->
+<div id="m-usuario" class="modal-bg">
+  <div class="modal">
+    <h3>Novo Usuário</h3>
+    <div class="fr2">
+      <div class="fg"><label>Nome *</label><input id="u-nome" placeholder="Nome completo"></div>
+      <div class="fg"><label>Perfil</label>
+        <select id="u-perfil">
+          <option value="Operador">Operador</option>
+          <option value="Lider">Líder de Produção</option>
+          <option value="Administrador">Administrador</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label>E-mail *</label><input id="u-email" type="email" placeholder="usuario@metaltech.com"></div>
+    <div class="fg"><label>Senha *</label><input id="u-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="fechar('m-usuario')">Cancelar</button>
+      <button class="btn btn-ghost" onclick="salvarUsuario()">Criar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="script.js"></script>
+</body>
+</html>
