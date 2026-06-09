@@ -1,11 +1,17 @@
 // ============================================================
 // Usuario.js — Model de Usuário (FactoryTrack)
 // Perfis: Administrador, Operador, Lider
+// Senhas são sempre armazenadas como hash bcrypt (nunca em texto puro).
 // ============================================================
 
 const { ready, query, run, get } = require('../database/sqlite');
 const bcrypt = require('bcryptjs');
 
+/**
+ * Normaliza uma linha do banco para o formato esperado pelo front-end.
+ * O campo `_id` é mantido por compatibilidade com o padrão MongoDB-like
+ * que o front-end usa nas requisições.
+ */
 function formatarUsuario(row) {
   if (!row) return null;
   return {
@@ -14,7 +20,7 @@ function formatarUsuario(row) {
     nome:      row.nome,
     email:     row.email,
     perfil:    row.perfil,
-    ativo:     row.ativo === 1,
+    ativo:     row.ativo === 1, // SQLite armazena booleanos como 0/1
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -22,6 +28,7 @@ function formatarUsuario(row) {
 
 const Usuario = {
 
+  // Retorna todos os usuários (sem o campo senha por segurança)
   async findAll() {
     await ready;
     const rows = query(`
@@ -31,6 +38,7 @@ const Usuario = {
     return rows.map(formatarUsuario);
   },
 
+  // Busca por email — inclui a senha (hash) para verificação no login
   async findByEmail(email) {
     await ready;
     return get('SELECT * FROM usuarios WHERE email = ?', [email.toLowerCase().trim()]);
@@ -45,9 +53,13 @@ const Usuario = {
     return formatarUsuario(row);
   },
 
+  /**
+   * Cria um novo usuário.
+   * A senha é hasheada com bcrypt (custo 10) antes de salvar.
+   */
   async create({ nome, email, senha, perfil = 'Operador' }) {
     await ready;
-    const hash = await bcrypt.hash(senha, 10);
+    const hash = await bcrypt.hash(senha, 10); // Custo 10 é o padrão recomendado
     const info = run(
       'INSERT INTO usuarios (nome, email, senha, perfil) VALUES (?, ?, ?, ?)',
       [nome.trim(), email.toLowerCase().trim(), hash, perfil]
@@ -55,13 +67,19 @@ const Usuario = {
     return this.findById(info.lastInsertRowid);
   },
 
+  /**
+   * Atualiza os dados de um usuário.
+   * Usa operador ?? (nullish coalescing) para manter o valor atual
+   * quando o campo não for enviado na requisição.
+   * Se uma nova senha for enviada, ela é re-hasheada antes de salvar.
+   */
   async update(id, { nome, email, senha, perfil, ativo }) {
     await ready;
     const atual = get('SELECT * FROM usuarios WHERE id = ?', [id]);
     if (!atual) return null;
 
-    let senhaFinal = atual.senha;
-    if (senha) senhaFinal = await bcrypt.hash(senha, 10);
+    let senhaFinal = atual.senha; // Mantém o hash existente por padrão
+    if (senha) senhaFinal = await bcrypt.hash(senha, 10); // Novo hash só se a senha mudou
 
     run(`
       UPDATE usuarios SET
@@ -77,7 +95,7 @@ const Usuario = {
       email  ?? atual.email,
       senhaFinal,
       perfil ?? atual.perfil,
-      ativo !== undefined ? (ativo ? 1 : 0) : atual.ativo,
+      ativo !== undefined ? (ativo ? 1 : 0) : atual.ativo, // Converte boolean → 0/1
       id
     ]);
 
@@ -87,9 +105,13 @@ const Usuario = {
   async delete(id) {
     await ready;
     const info = run('DELETE FROM usuarios WHERE id = ?', [id]);
-    return info.changes > 0;
+    return info.changes > 0; // Retorna true se alguma linha foi deletada
   },
 
+  /**
+   * Compara a senha digitada pelo usuário com o hash salvo no banco.
+   * bcrypt.compare é seguro contra timing attacks.
+   */
   verificarSenha(senhaDigitada, hashSalvo) {
     return bcrypt.compare(senhaDigitada, hashSalvo);
   },
