@@ -1,7 +1,20 @@
+// ============================================================
+// routes/index.js — Todas as rotas da API FactoryTrack
+//
+// Estrutura:
+//   POST /api/auth/login       — autenticação (pública)
+//   CRUD /api/produtos         — peças/produtos (protegido)
+//   CRUD /api/clientes         — clientes (protegido)
+//   CRUD /api/ordens           — ordens de produção (protegido)
+//   CRUD /api/usuarios         — usuários (apenas Administrador)
+//
+// Todas as rotas exceto /auth/login exigem Bearer token JWT.
+// ============================================================
+
 const express  = require('express');
 const jwt      = require('jsonwebtoken');
 const router   = express.Router();
-const auth     = require('../middlewares/auth');
+const auth     = require('../middlewares/auth'); // Middleware que valida o JWT
 
 const Usuario  = require('../models/Usuario');
 const Produto  = require('../models/Produto');
@@ -9,6 +22,13 @@ const Cliente  = require('../models/Cliente');
 const Ordem    = require('../models/Ordem');
 
 // ── Auth ───────────────────────────────────────────────────
+
+/**
+ * POST /api/auth/login
+ * Rota pública — não passa pelo middleware `auth`.
+ * Recebe { email, senha }, valida as credenciais e devolve
+ * um token JWT com validade de 8 horas.
+ */
 router.post('/auth/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
@@ -17,13 +37,15 @@ router.post('/auth/login', async (req, res) => {
     const usuario = await Usuario.findByEmail(email);
     if (!usuario) return res.status(401).json({ erro: 'Credenciais inválidas' });
 
+    // bcrypt compara a senha digitada com o hash salvo no banco
     const ok = await Usuario.verificarSenha(senha, usuario.senha);
     if (!ok) return res.status(401).json({ erro: 'Credenciais inválidas' });
 
+    // O payload do token carrega apenas dados não-sensíveis do usuário
     const token = jwt.sign(
       { id: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil },
       process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      { expiresIn: '8h' } // Token expira em 8 horas (jornada de trabalho)
     );
 
     res.json({ token, usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil } });
@@ -31,6 +53,8 @@ router.post('/auth/login', async (req, res) => {
 });
 
 // ── Produtos ───────────────────────────────────────────────
+// Todas as rotas abaixo exigem token JWT válido (middleware `auth`)
+
 router.get('/produtos', auth, async (req, res) => {
   try { res.json(await Produto.findAll()); }
   catch (e) { res.status(500).json({ erro: e.message }); }
@@ -69,8 +93,12 @@ router.delete('/produtos/:id', auth, async (req, res) => {
 });
 
 // ── Clientes ───────────────────────────────────────────────
+
 router.get('/clientes', auth, async (req, res) => {
-  try { res.json(await Cliente.findAll(req.query.busca)); }
+  try {
+    // req.query.busca permite filtrar clientes por nome (pesquisa no front-end)
+    res.json(await Cliente.findAll(req.query.busca));
+  }
   catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
@@ -107,6 +135,12 @@ router.delete('/clientes/:id', auth, async (req, res) => {
 });
 
 // ── Ordens de Produção ─────────────────────────────────────
+
+/**
+ * GET /api/ordens
+ * Retorna todas as ordens. Se `?lider=<id>` for passado,
+ * filtra apenas as ordens do líder logado (usado na tela de Produção).
+ */
 router.get('/ordens', auth, async (req, res) => {
   try {
     const filtros = {};
@@ -123,6 +157,12 @@ router.get('/ordens/:id', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
+/**
+ * POST /api/ordens
+ * Cria uma nova ordem de produção.
+ * O body deve conter: { cliente, itens[], formaPagamento, observacoes, prazo, origem, lider }
+ * O cálculo de subtotal e total é feito no model (Ordem.create).
+ */
 router.post('/ordens', auth, async (req, res) => {
   try {
     const { cliente, itens } = req.body;
@@ -136,12 +176,18 @@ router.post('/ordens', auth, async (req, res) => {
       observacoes:    req.body.observacoes,
       prazo:          req.body.prazo,
       origem:         req.body.origem,
+      // Usa o líder enviado no body, ou o próprio usuário logado como fallback
       liderId:        req.body.lider || req.usuario?.id,
     });
     res.status(201).json(nova);
   } catch (e) { res.status(400).json({ erro: e.message }); }
 });
 
+/**
+ * PATCH /api/ordens/:id/status
+ * Atualiza apenas o status de uma ordem.
+ * Rota separada de PUT para deixar explícito que é uma mudança de estado.
+ */
 router.patch('/ordens/:id/status', auth, async (req, res) => {
   try {
     const validos = ['aguardando_producao', 'em_producao', 'finalizado', 'cancelado'];
@@ -162,6 +208,10 @@ router.delete('/ordens/:id', auth, async (req, res) => {
 });
 
 // ── Usuários ───────────────────────────────────────────────
+// Gerenciamento de usuários é restrito ao perfil Administrador.
+// A verificação de perfil é feita dentro de cada rota usando req.usuario.perfil
+// (injetado pelo middleware `auth`).
+
 router.get('/usuarios', auth, async (req, res) => {
   try {
     if (req.usuario.perfil !== 'Administrador')
@@ -179,6 +229,7 @@ router.post('/usuarios', auth, async (req, res) => {
       return res.status(400).json({ erro: 'Nome, email e senha são obrigatórios' });
     res.status(201).json(await Usuario.create({ nome, email, senha, perfil }));
   } catch (e) {
+    // Trata violação de UNIQUE no email com mensagem amigável
     if (e.message?.includes('UNIQUE')) return res.status(400).json({ erro: 'E-mail já cadastrado' });
     res.status(500).json({ erro: e.message });
   }
