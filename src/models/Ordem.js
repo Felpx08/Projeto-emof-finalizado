@@ -1,10 +1,10 @@
 // ============================================================
 // Ordem.js — Model de Ordem de Produção (FactoryTrack)
-// Substitui o model Pedido do sistema anterior
 // ============================================================
 
 const { ready, query, run, get } = require('../database/sqlite');
 
+// Query base reutilizada nas buscas: une ordens com dados do cliente
 const SELECT_ORDEM = `
   SELECT
     o.*,
@@ -14,6 +14,10 @@ const SELECT_ORDEM = `
   LEFT JOIN clientes c ON c.id = o.cliente_id
 `;
 
+/**
+ * Transforma uma linha do banco (+ itens) no formato que o front-end espera.
+ * Os itens são passados separadamente pois vêm de uma segunda query.
+ */
 function formatarOrdem(row, itens = []) {
   if (!row) return null;
   return {
@@ -49,6 +53,11 @@ function formatarOrdem(row, itens = []) {
 
 const Ordem = {
 
+  /**
+   * Retorna todas as ordens com seus itens.
+   * Se `liderId` for informado, filtra apenas as ordens daquele líder
+   * (usado na tela de Produção para líderes de chão de fábrica).
+   */
   async findAll({ liderId } = {}) {
     await ready;
     let rows;
@@ -57,6 +66,7 @@ const Ordem = {
     } else {
       rows = query(`${SELECT_ORDEM} ORDER BY o.created_at DESC`);
     }
+    // Para cada ordem, busca os itens em uma query separada e monta o objeto completo
     return rows.map(row => {
       const itens = query('SELECT * FROM itens_ordem WHERE ordem_id = ?', [row.id]);
       return formatarOrdem(row, itens);
@@ -71,6 +81,16 @@ const Ordem = {
     return formatarOrdem(row, itens);
   },
 
+  /**
+   * Cria uma nova ordem de produção com seus itens.
+   *
+   * Fluxo:
+   *   1. Para cada item, busca o produto e calcula o subtotal (preço × qtd)
+   *   2. Soma o total geral
+   *   3. Gera o número sequencial da ordem (para exibição amigável ex: #42)
+   *   4. Insere a ordem principal
+   *   5. Insere os itens vinculados à ordem
+   */
   async create({ clienteId, itens, formaPagamento = 'a_prazo', observacoes = '', prazo = null, origem = 'administrativo', liderId = null }) {
     await ready;
 
@@ -78,6 +98,7 @@ const Ordem = {
     let subtotal = 0;
     const itensProcessados = [];
 
+    // Valida e processa cada item: busca o produto, calcula valores
     for (const item of itens) {
       const produto = await Produto.findById(item.produto);
       if (!produto) throw new Error(`Produto ID ${item.produto} não encontrado`);
@@ -86,6 +107,7 @@ const Ordem = {
       const subItem = preco * item.quantidade;
       subtotal     += subItem;
 
+      // Salva snapshot do nome e preço para histórico (o produto pode mudar no futuro)
       itensProcessados.push({
         produtoId:     produto.id,
         nomeProduto:   produto.nome,
@@ -96,9 +118,11 @@ const Ordem = {
     }
 
     const total       = subtotal;
+    // Número sequencial legível — conta total de ordens + 1
     const contagem    = get('SELECT COUNT(*) as total FROM ordens');
     const numeroOrdem = (contagem?.total || 0) + 1;
 
+    // Insere a ordem principal
     const infoOrdem = run(`
       INSERT INTO ordens
         (numero_ordem, cliente_id, subtotal, total,
@@ -109,6 +133,7 @@ const Ordem = {
 
     const ordemId = infoOrdem.lastInsertRowid;
 
+    // Insere cada item vinculado à ordem criada
     for (const it of itensProcessados) {
       run(`
         INSERT INTO itens_ordem
@@ -120,6 +145,11 @@ const Ordem = {
     return this.findById(ordemId);
   },
 
+  /**
+   * Atualiza apenas o status de uma ordem.
+   * Usa PATCH em vez de PUT para deixar explícito que é mudança de estado.
+   * Valores válidos: aguardando_producao | em_producao | finalizado | cancelado
+   */
   async updateStatus(id, status) {
     await ready;
     const info = run(
@@ -129,6 +159,7 @@ const Ordem = {
     return info.changes > 0 ? this.findById(id) : null;
   },
 
+  // Atualiza campos editáveis da ordem (observações, prazo, forma de pagamento)
   async update(id, campos) {
     await ready;
     const atual = get('SELECT * FROM ordens WHERE id = ?', [id]);
@@ -151,9 +182,13 @@ const Ordem = {
     return this.findById(id);
   },
 
+  /**
+   * Deleta uma ordem e todos os seus itens.
+   * Os itens precisam ser removidos primeiro por causa da FK (foreign key).
+   */
   async delete(id) {
     await ready;
-    run('DELETE FROM itens_ordem WHERE ordem_id = ?', [id]);
+    run('DELETE FROM itens_ordem WHERE ordem_id = ?', [id]); // Remove itens antes da ordem
     const info = run('DELETE FROM ordens WHERE id = ?', [id]);
     return info.changes > 0;
   },
