@@ -1,13 +1,38 @@
-const API = '/api';
+// ============================================================
+// script.js — Front-end do FactoryTrack (SPA vanilla JS)
+//
+// Toda a lógica de interface roda neste arquivo único:
+//   - Autenticação (login/logout com JWT)
+//   - Navegação entre seções (sem reload de página)
+//   - CRUD de Ordens, Produtos, Clientes e Usuários
+//   - Tela de Produção exclusiva para perfil Líder
+//   - Dashboard com resumo para perfil Administrador/Operador
+// ============================================================
 
-let cProdutos  = [];
-let cClientes  = [];
-let _statusFiltro = '';
+const API = '/api'; // Prefixo de todas as chamadas à API
 
+// ── Cache local ────────────────────────────────────────────
+// Evitam requisições repetidas enquanto a página está aberta.
+// São invalidados automaticamente após criar/editar/deletar.
+let cProdutos     = [];
+let cClientes     = [];
+let _statusFiltro = ''; // Filtro ativo na listagem de ordens
+
+// ── Sessão do usuário ──────────────────────────────────────
+// Token JWT e dados do usuário são persistidos no localStorage
+// para sobreviver a recarregamentos da página.
 let TOKEN          = localStorage.getItem('ft_token') || '';
 let USUARIO_LOGADO = JSON.parse(localStorage.getItem('ft_usuario') || 'null');
 
 // ═══════════════════════════════════ AUTH ══════════════════
+
+/**
+ * Realiza o login do usuário.
+ * Envia email/senha para a API e, em caso de sucesso:
+ *   - Salva o token JWT e os dados do usuário no localStorage
+ *   - Aplica restrições de interface conforme o perfil
+ *   - Adiciona a classe .logado ao body (exibe o app, oculta a tela de login)
+ */
 async function fazerLogin() {
   const email = document.getElementById('l-email').value.trim();
   const senha = document.getElementById('l-senha').value;
@@ -51,6 +76,11 @@ async function fazerLogin() {
   }
 }
 
+/**
+ * Encerra a sessão do usuário.
+ * Limpa o token e os dados do localStorage e remove a classe .logado,
+ * voltando para a tela de login.
+ */
 function sair() {
   TOKEN = '';
   USUARIO_LOGADO = null;
@@ -60,12 +90,19 @@ function sair() {
   document.getElementById('l-senha').value = '';
 }
 
+// Restaura sessão ao recarregar a página, se o token ainda estiver salvo
 if (TOKEN && USUARIO_LOGADO) {
   aplicarPerfil(USUARIO_LOGADO);
   document.body.classList.add('logado');
 }
 
 // ═══════════════════════════════════ HELPERS ═══════════════
+
+/**
+ * Exibe uma notificação temporária no canto da tela.
+ * @param {string} msg  - Mensagem a exibir
+ * @param {string} tipo - 'ok' (verde) | 'err' (vermelho)
+ */
 function toast(msg, tipo = 'ok') {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -73,17 +110,21 @@ function toast(msg, tipo = 'ok') {
   setTimeout(() => el.className = '', 3200);
 }
 
+// Abre/fecha modais adicionando ou removendo a classe CSS "open"
 function abrir(id)  { document.getElementById(id).classList.add('open'); }
 function fechar(id) { document.getElementById(id).classList.remove('open'); }
 
+// Fecha qualquer modal ao clicar no fundo escuro (overlay)
 document.querySelectorAll('.modal-bg').forEach(bg =>
   bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); })
 );
 
+// Formata um número como moeda brasileira: 1234.5 → "R$ 1.234,50"
 function R$(v) {
   return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ',');
 }
 
+// Retorna o HTML de um badge colorido para cada status de ordem
 function badge(s) {
   const r = {
     aguardando_producao: '⏳ Aguardando',
@@ -94,6 +135,12 @@ function badge(s) {
   return `<span class="badge b-${s}">${r[s] || s}</span>`;
 }
 
+/**
+ * Formata a data de prazo com alertas visuais:
+ *   - Vermelho + ⚠️ se o prazo já venceu
+ *   - Amarelo + 🔔 se vence em até 3 dias
+ *   - Normal para datas futuras
+ */
 function formatarPrazo(prazo) {
   if (!prazo) return '<span style="color:var(--muted)">—</span>';
   const d     = new Date(prazo + 'T00:00:00');
@@ -105,6 +152,15 @@ function formatarPrazo(prazo) {
   return `<span>${str}</span>`;
 }
 
+/**
+ * Wrapper para todas as chamadas à API.
+ * Injeta automaticamente o token JWT no cabeçalho Authorization.
+ * Se a API retornar 401 (token expirado), faz logout automático.
+ *
+ * @param {string} method - 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+ * @param {string} url    - Caminho relativo (ex: '/ordens/42')
+ * @param {object} body   - Corpo da requisição (opcional)
+ */
 async function api(method, url, body) {
   const opts = {
     method,
@@ -124,6 +180,18 @@ async function api(method, url, body) {
 }
 
 // ═══════════════════════════════════ PERFIL ════════════════
+
+/**
+ * Adapta a interface ao perfil do usuário logado.
+ *
+ * Regras de visibilidade:
+ *   Administrador — acesso total (menus, botões, dashboard, usuários)
+ *   Operador      — igual ao Administrador, exceto gerenciamento de usuários
+ *   Lider         — só vê "Produção" e "Catálogo de Peças"; não vê clientes,
+ *                   dashboard, ordens administrativas nem botão de novo produto
+ *
+ * Também define a página inicial que será exibida logo após o login.
+ */
 function aplicarPerfil(usuario) {
   document.getElementById('sb-nome').textContent   = usuario.nome;
   document.getElementById('sb-perfil').textContent = usuario.perfil;
@@ -172,6 +240,15 @@ function aplicarPerfil(usuario) {
 }
 
 // ═══════════════════════════════════ NAVEGAÇÃO ═════════════
+
+/**
+ * Navega para uma seção do SPA sem recarregar a página.
+ * Verifica permissões antes de exibir a seção solicitada.
+ * Cada seção tem uma função "loader" que busca seus dados da API.
+ *
+ * @param {string} pg  - ID da seção (ex: 'dashboard', 'ordens', 'producao')
+ * @param {Element} btn - Botão do menu que disparou a navegação (para marcar como ativo)
+ */
 function ir(pg, btn) {
   const perfil = document.getElementById('sb-perfil').textContent;
 
@@ -202,6 +279,13 @@ function ir(pg, btn) {
 }
 
 // ═══════════════════════════════════ DASHBOARD ═════════════
+
+/**
+ * Carrega o dashboard com estatísticas gerais.
+ * Faz 3 requisições em paralelo (Promise.all) para produtos, clientes e ordens,
+ * preenche os cards de métricas e renderiza os painéis de ordens recentes
+ * e catálogo de produtos disponíveis.
+ */
 async function carregarDashboard() {
   const h = new Date().getHours();
   const s = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
@@ -254,6 +338,8 @@ async function carregarDashboard() {
 }
 
 // ═══════════════════════════════════ ORDENS ════════════════
+
+// Cache local das ordens para permitir filtragem sem nova requisição
 let _todasOrdens = [];
 
 async function carregarOrdens() {
@@ -356,6 +442,12 @@ function addItemOrdem() {
   document.getElementById('itens-ordem-lista').appendChild(d);
 }
 
+/**
+ * Recalcula o total da ordem em tempo real.
+ * Percorre todas as linhas de item, lê o preço do data-attribute do <option>
+ * (definido quando a lista de produtos foi gerada) e atualiza o subtotal
+ * de cada linha e o total geral.
+ */
 function recalcOrdem() {
   let total = 0;
   document.querySelectorAll('#itens-ordem-lista .item-row').forEach(row => {
@@ -406,6 +498,11 @@ function abrirStatus(id, status) {
   abrir('m-status');
 }
 
+/**
+ * Envia a atualização de status via PATCH.
+ * Após salvar, detecta qual página está ativa e recarrega
+ * a listagem correta (ordens administrativas ou tela de produção do líder).
+ */
 async function salvarStatus() {
   const id     = document.getElementById('st-id').value;
   const status = document.getElementById('st-val').value;
@@ -430,6 +527,13 @@ async function deletarOrdem(id) {
 }
 
 // ═══════════════════════════════════ PRODUÇÃO (LÍDER) ══════
+
+/**
+ * Carrega a tela de produção, exclusiva para o perfil Líder.
+ * Filtra as ordens pelo ID do líder logado (?lider=<id>),
+ * exibe métricas (total, aguardando, em produção, finalizadas)
+ * e renderiza cards para cada ordem ativa.
+ */
 async function carregarProducao() {
   const grid = document.getElementById('grid-producao');
   grid.innerHTML = '<div class="spin-wrap"><div class="spin"></div> Carregando...</div>';
@@ -545,6 +649,13 @@ function recalcOrdemLider() {
   document.getElementById('ol-tot').textContent = R$(total);
 }
 
+/**
+ * Salva uma ordem criada pelo líder no chão de fábrica.
+ * Se nenhum cliente for selecionado, cria (ou reutiliza) automaticamente
+ * um cliente genérico "Produção Interna" para ordens internas.
+ * A origem da ordem é definida como 'producao' para diferenciá-la
+ * das ordens administrativas.
+ */
 async function salvarOrdemLider() {
   const itens = []; let valido = true;
   document.querySelectorAll('#itens-ordem-lider-lista .item-row').forEach(row => {
@@ -736,6 +847,8 @@ async function carregarClientes(busca = '') {
   }
 }
 
+// Debounce de 400ms na busca de clientes — evita uma requisição
+// para cada tecla digitada no campo de pesquisa
 let _t;
 function buscarCli(v) {
   clearTimeout(_t);
